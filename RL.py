@@ -10,9 +10,10 @@ import h5py
 
 class car():
 
-	def __init__(self, size):
+	def __init__(self, size, track):
 		self.size = size
 		self.car_size = 3
+		self.create_track = track
 		#self.x = random.randint(int(1.5*self.car_size), self.size-int(1.5*self.car_size))
 		#self.y = random.randint(int(1.5*self.car_size), self.size-int(1.5*self.car_size))
 		self.x = .15*self.size
@@ -25,9 +26,9 @@ class car():
 		self.r = []
 		# Generate car color
 		def mycolor():
-			c1 = random.uniform(0, 255)
-			c2 = random.uniform(0, 255)
-			c3 = random.uniform(0, 255)
+			c1 = random.uniform(50, 255)
+			c2 = random.uniform(50, 255)
+			c3 = random.uniform(50, 255)
 			return (c1, c2, c3)
 		
 		self.barva1 = mycolor()
@@ -44,14 +45,20 @@ class car():
 		return self.x == other.x and self.y == other.y
 
 	def action(self, orientation_increment, power_increment):
+		if self.create_track:
+			upower_limit = .2
+			lpower_limit = -.2
+		else:
+			upower_limit = 1.2
+			lpower_limit = -.2
 		self.orientation += orientation_increment
 		self.power += power_increment
 		if self.orientation >= 360 or self.orientation <= -360:
 			self.orientation = 0
-		if self.power >= 1.2:
-			self.power = 1.2
-		if self.power <= -.2:
-			self.power = -.2
+		if self.power >= upower_limit:
+			self.power = upower_limit
+		if self.power <= lpower_limit:
+			self.power = lpower_limit
 		if power_increment == 0:
 			self.power -= .02
 			if self.power <= 0:
@@ -61,7 +68,10 @@ class car():
 	def move(self, orientation, power):
 		self.x += power * np.cos(orientation*np.pi/180)
 		self.y += power * np.sin(orientation*np.pi/180)
-		self.kvadratek(orientation)
+		if self.create_track:
+			self.kvadratek(orientation, 2.5*self.car_size)
+		else:
+			self.kvadratek(orientation)
 
 		# Preveri, če smo še znotraj igrišča
 		if self.x <= 2*self.car_size:
@@ -81,8 +91,9 @@ class car():
 		self.b = np.array([self.x+a*np.cos((o+7*180/4+b)*2*np.pi/360), self.y+a*np.sin((o+7*180/4+b)*2*np.pi/360)])
 		self.r = np.array([self.x+a*np.cos((o+180/4-b)*2*np.pi/360), self.y+a*np.sin((o+180/4-b)*2*np.pi/360)])
 
-		self.p1 = np.array([self.x+a*np.cos((o+2*180/4+b)*2*np.pi/360), self.y+a*np.sin((o+2*180/4+b)*2*np.pi/360)])
-		self.p2 = np.array([self.x+a*np.cos((o+6*180/4-b)*2*np.pi/360), self.y+a*np.sin((o+6*180/4-b)*2*np.pi/360)])
+		if self.create_track:
+			self.p1 = np.array([self.x+a*np.cos((o+2*180/4+b)*2*np.pi/360), self.y+a*np.sin((o+2*180/4+b)*2*np.pi/360)])
+			self.p2 = np.array([self.x+a*np.cos((o+6*180/4-b)*2*np.pi/360), self.y+a*np.sin((o+6*180/4-b)*2*np.pi/360)])
 
 	def trk(self, pot):
 		for u in range(len(pot[0,:])):
@@ -118,24 +129,68 @@ class Env():
 		self.SIZE = 200
 		self.MOVE_PENALTY = 1
 		self.CRASH_PENALTY = -200
+		self.create_track = True
+		self.STEPS = 2_000
+		
+		try:
+			with h5py.File('Track-size_200-width_7-t_1570654659.9921403.h5','r') as f:
+				pot = f['/pot']
+				self.proga = pot[...]
+				print('Proga uspesno uvozena!')
+			line1 = self.proga[:2, :]
+			line2 = self.proga[-2:, :]
+			img = np.zeros((self.SIZE, self.SIZE, 3), dtype=np.uint8)
+			for i in range(len(line1[0])):
+				img[int(line1[0, i]), int(line1[1, i])] = (30, 30, 50)
+			for i in range(len(line2[0])):
+				img[int(line2[0, i]), int(line2[1, i])] = (30, 50, 30)
+			self.create_track = False
+
+		except Exception as e:
+			pass
+
+		if self.create_track == True:
+			img = np.zeros((self.SIZE, self.SIZE, 3), dtype=np.uint8)
+			self.STEPS = 6000
+			self.track = np.zeros((4, self.STEPS))
+			print(f'Ustvarjam novo progo...')
+
+		self.image = img
 		self.reset()
 
+
 	def reset(self):
-		self.avto = car(self.SIZE)
+		self.avto = car(self.SIZE, self.create_track)
 		self.episode_step = 0
 
 	def step(self, action):
 		self.episode_step += 1
 		self.avto.action(action[0], action[1])
 
+		if self.create_track:
+			self.track[0, self.episode_step-1] = self.avto.p1[0]
+			self.track[1, self.episode_step-1] = self.avto.p1[1] 
+			self.track[2, self.episode_step-1] = self.avto.p2[0] 
+			self.track[3, self.episode_step-1] = self.avto.p2[1]
+
+			if self.episode_step >= self.STEPS:
+				with h5py.File(f'Track-size_{self.SIZE}-width_{int(2.5*self.avto.car_size)}-t_{time.time()}.h5','w') as f:
+					data = f.create_dataset('pot', self.track.shape)
+					data[...] = self.track 
+				print(f'Track saved!')
+
 	def get_image(self):
 		img = np.zeros((self.SIZE, self.SIZE, 3), dtype=np.uint8)
-		print(int(self.avto.x), int(self.avto.y))
-		img[int(self.avto.x)][int(self.avto.y)] = self.avto.barva1
-		img[int(self.avto.t[0])][int(self.avto.t[1])] = self.avto.barva2
-		img[int(self.avto.l[0])][int(self.avto.l[1])] = self.avto.barva2
-		img[int(self.avto.b[0])][int(self.avto.b[1])] = self.avto.barva3
-		img[int(self.avto.r[0])][int(self.avto.r[1])] = self.avto.barva3
+		img = img + self.image
+		if not self.create_track:
+			img[int(self.avto.x)][int(self.avto.y)] = self.avto.barva1
+			img[int(self.avto.t[0])][int(self.avto.t[1])] = self.avto.barva2
+			img[int(self.avto.l[0])][int(self.avto.l[1])] = self.avto.barva2
+			img[int(self.avto.b[0])][int(self.avto.b[1])] = self.avto.barva3
+			img[int(self.avto.r[0])][int(self.avto.r[1])] = self.avto.barva3
+		else:
+			self.image[int(self.avto.p1[0])][int(self.avto.p1[1])] = (255, 255, 255)
+			self.image[int(self.avto.p2[0])][int(self.avto.p2[1])] = (255, 255, 255)
 		img = Image.fromarray(img, 'RGB')
 		return img
 
@@ -150,21 +205,24 @@ class player():
 	def __init__(self):
 		self.o = 0
 		self.p = 0
+		self.power_max = .05
+		self.power_min = -.2
+		self.orient_size = 5
 
 	def move_o(self):
 		if kb.is_pressed('left'):
-			self.o = 5
+			self.o = self.orient_size
 		elif kb.is_pressed('right'):
-			self.o = -5
+			self.o = -self.orient_size
 		else:
 			self.o = 0
 		return self.o
 
 	def move_p(self):
 		if kb.is_pressed('up'):
-			self.p = .05
+			self.p = self.power_max
 		elif kb.is_pressed('down'):
-			self.p = -.2
+			self.p = self.power_min
 		else:
 			self.p = 0
 		return self.p
@@ -173,10 +231,11 @@ class player():
 env = Env()
 jernej = player()
 
-for i in range(2000):
+for i in range(env.STEPS):
 	action = [jernej.move_o(), jernej.move_p()]
 	env.step(action)
 	env.render()
+
 	
 
 
