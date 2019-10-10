@@ -11,19 +11,17 @@ import h5py
 class car():
 
 	def __init__(self, size, track):
-		self.size = size
+		self.size = size  # Playground size, inhereted from Environment
 		self.car_size = 3
 		self.create_track = track
-		#self.x = random.randint(int(1.5*self.car_size), self.size-int(1.5*self.car_size))
-		#self.y = random.randint(int(1.5*self.car_size), self.size-int(1.5*self.car_size))
-		self.x = .15*self.size
+		self.x = .15*self.size  # Set fixed car position
 		self.y = .2*self.size
-		self.orientation = 90
-		self.power = 0
-		self.t = []
-		self.l = []
-		self.b = []
-		self.r = []
+		self.orientation = 90  # Set fixed car orientation
+		self.power = 0  # Initial car thrust is zero
+		self.t = []  # Top-left corner of a car
+		self.l = []  # Bottom-left corner of a car
+		self.b = []  # Bottom-right corner of a car
+		self.r = []  # Top-right corner of a car
 		# Generate car color
 		def mycolor():
 			c1 = random.uniform(50, 255)
@@ -45,35 +43,36 @@ class car():
 		return self.x == other.x and self.y == other.y
 
 	def action(self, orientation_increment, power_increment):
+		self.orientation += orientation_increment
+		self.power += power_increment
+
 		if self.create_track:
-			upower_limit = .2
+			upower_limit = .2  # Creating a track, we want a car to go slower
 			lpower_limit = -.2
 		else:
 			upower_limit = 1.2
 			lpower_limit = -.2
-		self.orientation += orientation_increment
-		self.power += power_increment
 		if self.orientation >= 360 or self.orientation <= -360:
-			self.orientation = 0
+			self.orientation = 0  # Orientation of a car is always [-360, 360]
 		if self.power >= upower_limit:
-			self.power = upower_limit
+			self.power = upower_limit  # Max power limit
 		if self.power <= lpower_limit:
-			self.power = lpower_limit
+			self.power = lpower_limit  # Min power limit
 		if power_increment == 0:
-			self.power -= .02
+			self.power -= .02  # If no power input, slow deceleration
 			if self.power <= 0:
-				self.power = 0
-		self.move(self.orientation, self.power)
+				self.power = 0  # ..until car stops.
+		self.move(self.orientation, self.power)  # Move a car!
 
 	def move(self, orientation, power):
-		self.x += power * np.cos(orientation*np.pi/180)
+		self.x += power * np.cos(orientation*np.pi/180)  # Set coordinates to a new position
 		self.y += power * np.sin(orientation*np.pi/180)
 		if self.create_track:
-			self.kvadratek(orientation, 2.5*self.car_size)
+			self.kvadratek(orientation, 2.5*self.car_size)  # Orient car's corners (creating a track, "car" should be wider)
 		else:
-			self.kvadratek(orientation)
+			self.kvadratek(orientation)  # Orient car's corners
 
-		# Preveri, če smo še znotraj igrišča
+		# Is car still inside our environment? If not, correct.
 		if self.x <= 2*self.car_size:
 			self.x = 2*self.car_size
 		elif self.x >= self.size-2*self.car_size:
@@ -84,6 +83,7 @@ class car():
 			self.y = self.size-2*self.car_size
 
 	def kvadratek(self, o, a=False, b=15):
+		# Calculate car's correct corner points orientation
 		if not a:
 			a = self.car_size
 		self.t = np.array([self.x+a*np.cos((o+3*180/4+b)*2*np.pi/360), self.y+a*np.sin((o+3*180/4+b)*2*np.pi/360)])
@@ -95,34 +95,6 @@ class car():
 			self.p1 = np.array([self.x+a*np.cos((o+2*180/4+b)*2*np.pi/360), self.y+a*np.sin((o+2*180/4+b)*2*np.pi/360)])
 			self.p2 = np.array([self.x+a*np.cos((o+6*180/4-b)*2*np.pi/360), self.y+a*np.sin((o+6*180/4-b)*2*np.pi/360)])
 
-	def trk(self, pot):
-		for u in range(len(pot[0,:])):
-			tb_x = round(self.b[0],0)
-			tb_y = round(self.b[1],0)
-			tr_x = round(self.r[0],0)
-			tr_y = round(self.r[1],0)
-			pot1_x = round(pot[0,u],0)
-			pot1_y = round(pot[1,u],0)
-			pot2_x = round(pot[2,u],0)
-			pot2_y = round(pot[3,u],0)
-
-			if tb_x == pot1_x and tb_y == pot1_y:
-				self.konec = True
-				print('Zabil si se v notranjo ograjo!')
-				break
-			elif tr_x == pot2_x and tr_y == pot2_y:
-				self.konec = True
-				print('Zabil si se v zunanjo ograjo!')
-				break
-			elif tb_x == pot2_x and tb_y == pot2_y:
-				self.konec = True
-				print('Zabil si se v zunanjo ograjo!')
-				break
-			elif tr_x == pot1_x and tr_y == pot1_y:
-				self.konec = True
-				print('Zabil si se v notranjo ograjo!')
-				break
-
 
 class Env():
 	def __init__(self):
@@ -131,8 +103,10 @@ class Env():
 		self.CRASH_PENALTY = -200
 		self.create_track = True
 		self.STEPS = 2_000
+		self.done = False
 		
 		try:
+			# If track exist, load it. If not, create it!
 			with h5py.File('Track-size_200-width_7-t_1570654659.9921403.h5','r') as f:
 				pot = f['/pot']
 				self.proga = pot[...]
@@ -149,9 +123,9 @@ class Env():
 		except Exception as e:
 			pass
 
-		if self.create_track == True:
+		if self.create_track:
 			img = np.zeros((self.SIZE, self.SIZE, 3), dtype=np.uint8)
-			self.STEPS = 6000
+			self.STEPS = 4_500
 			self.track = np.zeros((4, self.STEPS))
 			print(f'Ustvarjam novo progo...')
 
@@ -165,10 +139,11 @@ class Env():
 
 	def step(self, action):
 		self.episode_step += 1
-		self.avto.action(action[0], action[1])
+		self.avto.action(action[0], action[1])  # Tell a car which action to take
+		self.collision()  # Check if car crashed
 
 		if self.create_track:
-			self.track[0, self.episode_step-1] = self.avto.p1[0]
+			self.track[0, self.episode_step-1] = self.avto.p1[0]  # Record the track
 			self.track[1, self.episode_step-1] = self.avto.p1[1] 
 			self.track[2, self.episode_step-1] = self.avto.p2[0] 
 			self.track[3, self.episode_step-1] = self.avto.p2[1]
@@ -181,9 +156,9 @@ class Env():
 
 	def get_image(self):
 		img = np.zeros((self.SIZE, self.SIZE, 3), dtype=np.uint8)
-		img = img + self.image
+		img = img + self.image  # Adds a track to an image
 		if not self.create_track:
-			img[int(self.avto.x)][int(self.avto.y)] = self.avto.barva1
+			img[int(self.avto.x)][int(self.avto.y)] = self.avto.barva1  # Draw the car at current position
 			img[int(self.avto.t[0])][int(self.avto.t[1])] = self.avto.barva2
 			img[int(self.avto.l[0])][int(self.avto.l[1])] = self.avto.barva2
 			img[int(self.avto.b[0])][int(self.avto.b[1])] = self.avto.barva3
@@ -195,10 +170,17 @@ class Env():
 		return img
 
 	def render(self):
-		img = self.get_image()
+		img = self.get_image()  # Display current image
 		img = img.resize((400, 400))
 		cv2.imshow('image', np.array(img))
 		cv2.waitKey(10)
+
+	def collision(self):
+		# Check if car has crashed into inner or outer wall
+		if not self.image[int(self.avto.b[0]), int(self.avto.b[1]), 0] == 0:
+			self.done = True
+		if not self.image[int(self.avto.r[0]), int(self.avto.r[1]), 0] == 0:
+			self.done = True
 
 class player():
 
@@ -210,6 +192,7 @@ class player():
 		self.orient_size = 5
 
 	def move_o(self):
+		# Change a car's orientation
 		if kb.is_pressed('left'):
 			self.o = self.orient_size
 		elif kb.is_pressed('right'):
@@ -219,6 +202,7 @@ class player():
 		return self.o
 
 	def move_p(self):
+		# Change a car's thrust (power)
 		if kb.is_pressed('up'):
 			self.p = self.power_max
 		elif kb.is_pressed('down'):
@@ -235,6 +219,10 @@ for i in range(env.STEPS):
 	action = [jernej.move_o(), jernej.move_p()]
 	env.step(action)
 	env.render()
+	if env.done:
+		print(f'Crashed in episode step: {env.episode_step}')
+		env.reset()
+		env.done = False
 
 	
 
