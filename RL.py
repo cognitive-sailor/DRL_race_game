@@ -1,6 +1,6 @@
 import random
 import numpy as np
-import keyboard as kb 
+import keyboard as kb
 from PIL import Image
 import cv2
 import time
@@ -8,7 +8,7 @@ import h5py
 
 
 
-class car():
+class Car:
 
 	def __init__(self, size, track):
 		self.size = size  # Playground size, inhereted from Environment
@@ -23,15 +23,15 @@ class car():
 		self.b = []  # Bottom-right corner of a car
 		self.r = []  # Top-right corner of a car
 		# Generate car color
-		def mycolor():
+		def my_color():
 			c1 = random.uniform(50, 255)
 			c2 = random.uniform(50, 255)
 			c3 = random.uniform(50, 255)
-			return (c1, c2, c3)
-		
-		self.barva1 = mycolor()
-		self.barva2 = mycolor()
-		self.barva3 = mycolor()
+			return c1, c2, c3
+
+		self.barva1 = my_color()
+		self.barva2 = my_color()
+		self.barva3 = my_color()
 
 	def __sub__(self, other):
 		return (self.x-other.x, self.y-other.y)
@@ -96,7 +96,7 @@ class car():
 			self.p2 = np.array([self.x+a*np.cos((o+6*180/4-b)*2*np.pi/360), self.y+a*np.sin((o+6*180/4-b)*2*np.pi/360)])
 
 
-class Env():
+class Env:
 	def __init__(self):
 		self.SIZE = 200
 		self.MOVE_PENALTY = 1
@@ -104,7 +104,7 @@ class Env():
 		self.create_track = True
 		self.STEPS = 2_000
 		self.done = False
-		
+
 		try:
 			# If track exist, load it. If not, create it!
 			with h5py.File('Track-size_200-width_7-t_1570654659.9921403.h5','r') as f:
@@ -134,7 +134,7 @@ class Env():
 
 
 	def reset(self):
-		self.avto = car(self.SIZE, self.create_track)
+		self.avto = Car(self.SIZE, self.create_track)
 		self.episode_step = 0
 
 	def step(self, action):
@@ -144,14 +144,14 @@ class Env():
 
 		if self.create_track:
 			self.track[0, self.episode_step-1] = self.avto.p1[0]  # Record the track
-			self.track[1, self.episode_step-1] = self.avto.p1[1] 
-			self.track[2, self.episode_step-1] = self.avto.p2[0] 
+			self.track[1, self.episode_step-1] = self.avto.p1[1]
+			self.track[2, self.episode_step-1] = self.avto.p2[0]
 			self.track[3, self.episode_step-1] = self.avto.p2[1]
 
 			if self.episode_step >= self.STEPS:
 				with h5py.File(f'Track-size_{self.SIZE}-width_{int(2.5*self.avto.car_size)}-t_{time.time()}.h5','w') as f:
 					data = f.create_dataset('pot', self.track.shape)
-					data[...] = self.track 
+					data[...] = self.track
 				print(f'Track saved!')
 
 	def get_image(self):
@@ -182,7 +182,7 @@ class Env():
 		if not self.image[int(self.avto.r[0]), int(self.avto.r[1]), 0] == 0:
 			self.done = True
 
-class player():
+class Player:
 
 	def __init__(self):
 		self.o = 0
@@ -212,8 +212,9 @@ class player():
 		return self.p
 
 
+'''
 env = Env()
-jernej = player()
+jernej = Player()
 
 for i in range(env.STEPS):
 	action = [jernej.move_o(), jernej.move_p()]
@@ -222,16 +223,4 @@ for i in range(env.STEPS):
 	if env.done:
 		print(f'Crashed in episode step: {env.episode_step}')
 		env.reset()
-		env.done = False
-
-	
-
-
-
-
-
-
-
-
-
-
+		env.done = False'''

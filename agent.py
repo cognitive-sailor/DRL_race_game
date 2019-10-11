@@ -1,7 +1,7 @@
 import RL
 
-env = Env()
-jernej = Player()
+env = RL.Env()
+jernej = RL.Player()
 
 for i in range(env.STEPS):
 	action = [jernej.move_o(), jernej.move_p()]
