@@ -8,6 +8,6 @@ for i in range(env.STEPS):
 	env.step(action)
 	env.render()
 	if env.done:
-		print(f'Crashed in episode step: {env.episode_step}')
+		print(f'Crashed in episode step: {env.episode_step}');
 		env.reset()
 		env.done = False
