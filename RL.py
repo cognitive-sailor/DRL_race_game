@@ -5,6 +5,7 @@ from PIL import Image
 import cv2
 import time
 import h5py
+import reward_gates as rg
 
 
 
@@ -99,11 +100,16 @@ class Car:
 class Env:
 	def __init__(self):
 		self.SIZE = 200
-		self.MOVE_PENALTY = 1
+		self.MOVE_PENALTY = -1
 		self.CRASH_PENALTY = -200
 		self.create_track = True
 		self.STEPS = 2_000
+		self.GATE_REWARD = 50
 		self.done = False
+		self.crashed = False
+		self.through_gate = False
+		self.episode_step = 0
+
 
 		try:
 			# If track exist, load it. If not, create it!
@@ -113,11 +119,21 @@ class Env:
 				print('Proga uspesno uvozena!')
 			line1 = self.proga[:2, :]
 			line2 = self.proga[-2:, :]
+
+			# Make reward_gates
+			gates = rg.Gate(self.proga)
+
 			img = np.zeros((self.SIZE, self.SIZE, 3), dtype=np.uint8)
 			for i in range(len(line1[0])):
 				img[int(line1[0, i]), int(line1[1, i])] = (30, 30, 50)
 			for i in range(len(line2[0])):
 				img[int(line2[0, i]), int(line2[1, i])] = (30, 50, 30)
+
+			# Draw gates
+			for i in range(gates.NUMBER_OF_GATES):
+				for j in range(gates.POINTS):
+					img[int(gates.LINES[i][j][0]), int(gates.LINES[i][j][1])] = (255, 0, 0)
+
 			self.create_track = False
 
 		except Exception as e:
@@ -136,11 +152,24 @@ class Env:
 	def reset(self):
 		self.avto = Car(self.SIZE, self.create_track)
 		self.episode_step = 0
+		self.crashed = False
+		self.done = False
 
 	def step(self, action):
 		self.episode_step += 1
 		self.avto.action(action[0], action[1])  # Tell a car which action to take
 		self.collision()  # Check if car crashed
+		ga_reward = self.gate_check() # Check if car passed a gate
+		reward = 0
+		# Get the reward
+		if self.crashed or self.episode_step >= self.STEPS:
+			reward = self.CRASH_PENALTY
+			self.done = True
+		elif self.through_gate:
+			reward = ga_reward + self.MOVE_PENALTY
+
+		# Get new observation
+		new_observation = np.array(self.get_image())
 
 		if self.create_track:
 			self.track[0, self.episode_step-1] = self.avto.p1[0]  # Record the track
@@ -153,6 +182,8 @@ class Env:
 					data = f.create_dataset('pot', self.track.shape)
 					data[...] = self.track
 				print(f'Track saved!')
+
+		return new_observation, reward
 
 	def get_image(self):
 		img = np.zeros((self.SIZE, self.SIZE, 3), dtype=np.uint8)
@@ -177,10 +208,19 @@ class Env:
 
 	def collision(self):
 		# Check if car has crashed into inner or outer wall
-		if not self.image[int(self.avto.b[0]), int(self.avto.b[1]), 0] == 0:
-			self.done = True
-		if not self.image[int(self.avto.r[0]), int(self.avto.r[1]), 0] == 0:
-			self.done = True
+		if not self.image[int(self.avto.b[0]), int(self.avto.b[1]), 1] == 0:
+			self.crashed = True
+		if not self.image[int(self.avto.r[0]), int(self.avto.r[1]), 1] == 0:
+			self.crashed = True
+
+	def gate_check(self):
+		# Check if car has passed a gate
+		if self.image[int(self.avto.x), int(self.avto.y), 0] == 255:
+			self.through_gate = True
+			g_reward = self.GATE_REWARD
+		else:
+			g_reward = 0
+		return g_reward
 
 class Player:
 
@@ -212,7 +252,7 @@ class Player:
 		return self.p
 
 
-'''
+
 env = Env()
 jernej = Player()
 
@@ -223,4 +263,3 @@ for i in range(env.STEPS):
 	if env.done:
 		print(f'Crashed in episode step: {env.episode_step}')
 		env.reset()
-		env.done = False'''
