@@ -240,7 +240,10 @@ class Env:
 				self.image[int(self.gates.LINES[self.gate_index][j][0]),
 					int(self.gates.LINES[self.gate_index][j][1])] = (0, 0, 0)
 			# Draw the next gate
-			self.gate_index += 1
+			if self.gate_index == self.gates.NUMBER_OF_GATES:
+				self.gate_index = 0  # Draw the first gate again, if agent made a whole lap
+			else:
+				self.gate_index += 1
 			for j in range(self.gates.POINTS):
 				self.image[int(self.gates.LINES[self.gate_index][j][0]),
 					int(self.gates.LINES[self.gate_index][j][1])] = (255, 0, 0)
