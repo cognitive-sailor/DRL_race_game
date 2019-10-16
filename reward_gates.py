@@ -16,8 +16,7 @@ class Gate:
         # Generate series of points for each gate
         for j in range(len(self.point_pairs)):
             a = Line(self.point_pairs[j], self.POINTS)
-            A = np.array(a.line)
-            self.LINES[j, :] = A
+            self.LINES[j, :] = np.array(a.line)
 
 
 class Line:

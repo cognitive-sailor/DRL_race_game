@@ -44,7 +44,10 @@ class Car:
 		return self.x == other.x and self.y == other.y
 
 	def action(self, orientation_increment, power_increment):
-		self.orientation += orientation_increment
+		if self.create_track:
+			self.orientation += orientation_increment*.25
+		else:
+			self.orientation += orientation_increment
 		self.power += power_increment
 
 		if self.create_track:
@@ -113,26 +116,23 @@ class Env:
 
 		try:
 			# If track exist, load it. If not, create it!
-			with h5py.File('Track-size_200-width_7-t_1570654659.9921403.h5','r') as f:
+			with h5py.File('Track-size_200-width_7-t_1571223844.2934508.h5','r') as f:
 				pot = f['/pot']
 				self.proga = pot[...]
 				print('Proga uspesno uvozena!')
 			line1 = self.proga[:2, :]
 			line2 = self.proga[-2:, :]
 
-			# Make reward_gates
-			gates = rg.Gate(self.proga)
-
+			# Draw the track
 			img = np.zeros((self.SIZE, self.SIZE, 3), dtype=np.uint8)
 			for i in range(len(line1[0])):
 				img[int(line1[0, i]), int(line1[1, i])] = (30, 30, 50)
 			for i in range(len(line2[0])):
 				img[int(line2[0, i]), int(line2[1, i])] = (30, 50, 30)
 
-			# Draw gates
-			for i in range(gates.NUMBER_OF_GATES):
-				for j in range(gates.POINTS):
-					img[int(gates.LINES[i][j][0]), int(gates.LINES[i][j][1])] = (255, 0, 0)
+			# Make reward_gates
+			self.gates = rg.Gate(self.proga)
+			self.gate_index = 0
 
 			self.create_track = False
 
@@ -141,7 +141,7 @@ class Env:
 
 		if self.create_track:
 			img = np.zeros((self.SIZE, self.SIZE, 3), dtype=np.uint8)
-			self.STEPS = 4_500
+			self.STEPS = 5_000
 			self.track = np.zeros((4, self.STEPS))
 			print(f'Ustvarjam novo progo...')
 
@@ -154,12 +154,23 @@ class Env:
 		self.episode_step = 0
 		self.crashed = False
 		self.done = False
+		# Erase the unreached gate
+		for j in range(self.gates.POINTS):
+			self.image[int(self.gates.LINES[self.gate_index][j][0]),
+				int(self.gates.LINES[self.gate_index][j][1])] = (0, 0, 0)
+		# Draw the first gate
+		for j in range(self.gates.POINTS):
+			self.image[int(self.gates.LINES[0][j][0]),
+				int(self.gates.LINES[0][j][1])] = (255, 0, 0)
+
+		self.gate_index = 0
 
 	def step(self, action):
 		self.episode_step += 1
 		self.avto.action(action[0], action[1])  # Tell a car which action to take
-		self.collision()  # Check if car crashed
-		ga_reward = self.gate_check() # Check if car passed a gate
+		if not self.create_track:
+			self.collision()  # Check if car crashed
+			ga_reward = self.gate_check() # Check if car passed a gate
 		reward = 0
 		# Get the reward
 		if self.crashed or self.episode_step >= self.STEPS:
@@ -167,6 +178,11 @@ class Env:
 			self.done = True
 		elif self.through_gate:
 			reward = ga_reward + self.MOVE_PENALTY
+		else:
+			reward = self.MOVE_PENALTY
+
+		# Reset the "through_gate" flag
+		self.through_gate = False
 
 		# Get new observation
 		new_observation = np.array(self.get_image())
@@ -218,6 +234,17 @@ class Env:
 		if self.image[int(self.avto.x), int(self.avto.y), 0] == 255:
 			self.through_gate = True
 			g_reward = self.GATE_REWARD
+			print('Just drove through the gate!')
+			# Erase current gate
+			for j in range(self.gates.POINTS):
+				self.image[int(self.gates.LINES[self.gate_index][j][0]),
+					int(self.gates.LINES[self.gate_index][j][1])] = (0, 0, 0)
+			# Draw the next gate
+			self.gate_index += 1
+			for j in range(self.gates.POINTS):
+				self.image[int(self.gates.LINES[self.gate_index][j][0]),
+					int(self.gates.LINES[self.gate_index][j][1])] = (255, 0, 0)
+
 		else:
 			g_reward = 0
 		return g_reward
@@ -252,7 +279,7 @@ class Player:
 		return self.p
 
 
-
+'''
 env = Env()
 jernej = Player()
 
@@ -263,3 +290,4 @@ for i in range(env.STEPS):
 	if env.done:
 		print(f'Crashed in episode step: {env.episode_step}')
 		env.reset()
+'''
